@@ -137,13 +137,14 @@ export function createSession(data: {
   provider?: string
   title?: string
   workspace?: string
+  userId?: string
 }): HermesSessionRow {
   const now = Math.floor(Date.now() / 1000)
   const source = data.source || 'api_server'
   if (!isSqliteAvailable()) {
     return {
       id: data.id, profile: data.profile || 'default', source,
-      user_id: null, model: data.model || '', provider: data.provider || '', title: data.title || null,
+      user_id: data.userId || null, model: data.model || '', provider: data.provider || '', title: data.title || null,
       started_at: now, ended_at: null, end_reason: null,
       message_count: 0, tool_call_count: 0,
       input_tokens: 0, output_tokens: 0, cache_read_tokens: 0, cache_write_tokens: 0, reasoning_tokens: 0,
@@ -153,9 +154,9 @@ export function createSession(data: {
   }
   const db = getDb()!
   db.prepare(
-    `INSERT INTO ${SESSIONS_TABLE} (id, profile, source, model, provider, title, started_at, last_active, workspace)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-  ).run(data.id, data.profile || 'default', source, data.model || '', data.provider || '', data.title || null, now, now, data.workspace || null)
+    `INSERT INTO ${SESSIONS_TABLE} (id, profile, source, user_id, model, provider, title, started_at, last_active, workspace)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+  ).run(data.id, data.profile || 'default', source, data.userId || null, data.model || '', data.provider || '', data.title || null, now, now, data.workspace || null)
   return getSession(data.id)!
 }
 
@@ -220,7 +221,7 @@ export function renameSession(id: string, title: string): boolean {
   return result.changes > 0
 }
 
-export function listSessions(profile?: string, source?: string, limit = 2000): HermesSessionRow[] {
+export function listSessions(profile?: string, source?: string, limit = 2000, userId?: string): HermesSessionRow[] {
   if (!isSqliteAvailable()) return []
   const db = getDb()!
   const profileFilter = profile?.trim()
@@ -244,6 +245,7 @@ export function listSessions(profile?: string, source?: string, limit = 2000): H
     WHERE 1 = 1
       ${profileFilter ? 'AND s.profile = ?' : ''}
       ${source ? 'AND s.source = ?' : ''}
+      ${userId ? 'AND s.user_id = ?' : ''}
     ORDER BY s.last_active DESC
     LIMIT ?
   `
@@ -255,18 +257,21 @@ export function listSessions(profile?: string, source?: string, limit = 2000): H
   if (source) {
     params.push(source)
   }
+  if (userId) {
+    params.push(userId)
+  }
   params.push(limit)
 
   const rows = db.prepare(sql).all(...params) as Record<string, unknown>[]
   return rows.map(mapSessionRow)
 }
 
-export function searchSessions(profile: string | null | undefined, query: string, limit = 20): HermesSessionSearchRow[] {
+export function searchSessions(profile: string | null | undefined, query: string, limit = 20, userId?: string): HermesSessionSearchRow[] {
   if (!isSqliteAvailable()) return []
   const profileFilter = profile?.trim()
   const trimmed = query.trim()
   if (!trimmed) {
-    return listSessions(profileFilter, undefined, limit).map(s => ({ ...s, snippet: s.preview || '', matched_message_id: null }))
+    return listSessions(profileFilter, undefined, limit, userId).map(s => ({ ...s, snippet: s.preview || '', matched_message_id: null }))
   }
   const db = getDb()!
   const lowered = trimmed.toLowerCase()
@@ -277,6 +282,7 @@ export function searchSessions(profile: string | null | undefined, query: string
     `SELECT * FROM ${SESSIONS_TABLE}
      WHERE 1 = 1
        ${profileFilter ? 'AND profile = ?' : ''}
+       ${userId ? 'AND user_id = ?' : ''}
        AND (
        LOWER(title) LIKE ? OR LOWER(preview) LIKE ?
        OR id IN (SELECT DISTINCT session_id FROM ${MESSAGES_TABLE} WHERE LOWER(content) LIKE ? OR LOWER(COALESCE(tool_name, '')) LIKE ?)
@@ -284,6 +290,7 @@ export function searchSessions(profile: string | null | undefined, query: string
      ORDER BY last_active DESC LIMIT ?`,
   ).all(...[
     ...(profileFilter ? [profileFilter] : []),
+    ...(userId ? [userId] : []),
     pattern,
     pattern,
     pattern,

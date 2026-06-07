@@ -1,7 +1,7 @@
 export default {
   // 登录
   login: {
-    title: 'Hermes Web UI',
+    title: '欢迎您回来！',
     description: '输入用户名和密码以继续。',
     placeholder: '访问令牌',
     submit: '登录',
@@ -181,7 +181,7 @@ export default {
   sidebar: {
     chat: '对话',
     search: '搜索',
-    apiRelay: '饲料',
+    apiRelay: '中转站',
     history: '历史',
     jobs: '任务',
     kanban: '看板',

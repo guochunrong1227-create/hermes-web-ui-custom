@@ -48,6 +48,10 @@ function explicitProfileFilter(ctx: any): string | undefined {
   return value || undefined
 }
 
+function getCurrentUserId(ctx: any): string | undefined {
+  return ctx.state?.user?.id
+}
+
 function allowedProfileSet(ctx: any): Set<string> | null {
   const user = ctx.state?.user
   if (!user || user.role === 'super_admin') return null
@@ -66,7 +70,17 @@ function filterByAllowedProfiles<T>(ctx: any, items: T[]): T[] {
 }
 
 function denySessionAccess(ctx: any, session: any | null | undefined): boolean {
-  if (!session || canAccessProfile(ctx, session.profile)) return false
+  if (!session) return false
+  // super_admin can access all sessions
+  if (ctx.state?.user?.role === 'super_admin') return false
+  // Check user_id ownership — if session has a user_id, it must match
+  const userId = getCurrentUserId(ctx)
+  if (userId && session.user_id && session.user_id !== userId) {
+    ctx.status = 403
+    ctx.body = { error: 'You do not have access to this session' }
+    return true
+  }
+  if (canAccessProfile(ctx, session.profile)) return false
   ctx.status = 403
   ctx.body = { error: `Profile "${session.profile || 'default'}" is not available for this user` }
   return true
@@ -248,7 +262,8 @@ export async function listConversations(ctx: any) {
   const limit = ctx.query.limit ? parseInt(ctx.query.limit as string, 10) : undefined
 
   const profile = explicitProfileFilter(ctx)
-  const sessions = localListSessions(profile, source, limit && limit > 0 ? limit : 200)
+  const userId = getCurrentUserId(ctx)
+  const sessions = localListSessions(profile, source, limit && limit > 0 ? limit : 200, userId)
   const summaries: ConversationSummary[] = sessions.map(s => ({
     id: s.id,
     profile: s.profile || null,
@@ -315,7 +330,7 @@ export async function list(ctx: any) {
   const profile = explicitProfileFilter(ctx)
   const effectiveLimit = limit && limit > 0 ? limit : 2000
 
-  const allSessions = localListSessions(profile, source, effectiveLimit)
+  const allSessions = localListSessions(profile, source, effectiveLimit, getCurrentUserId(ctx))
   const knownProfiles = profile ? null : new Set(listProfileNamesFromDisk())
   ctx.body = {
     sessions: filterPendingDeletedSessions(filterByAllowedProfiles(ctx, allSessions).filter(s =>
@@ -335,7 +350,7 @@ export async function listHermesSessions(ctx: any) {
   const profile = requestedProfile(ctx)
   const effectiveLimit = limit && limit > 0 ? limit : 2000
 
-  const importedIds = new Set(localListSessions(profile, undefined, effectiveLimit).map(session => session.id))
+  const importedIds = new Set(localListSessions(profile, undefined, effectiveLimit, getCurrentUserId(ctx)).map(session => session.id))
   const allSessions = (await listSessionSummaries(source, effectiveLimit, profile))
     .map(session => ({
       ...(profile ? { ...session, profile } : session),
@@ -348,7 +363,7 @@ export async function search(ctx: any) {
   const q = typeof ctx.query.q === 'string' ? ctx.query.q : ''
   const limit = ctx.query.limit ? parseInt(ctx.query.limit as string, 10) : undefined
   const profile = explicitProfileFilter(ctx)
-  const results = localSearchSessions(profile, q, limit && limit > 0 ? limit : 20)
+  const results = localSearchSessions(profile, q, limit && limit > 0 ? limit : 20, getCurrentUserId(ctx))
   const knownProfiles = profile ? null : new Set(listProfileNamesFromDisk())
   ctx.body = {
     results: filterPendingDeletedSessions(filterByAllowedProfiles(ctx, results).filter(s =>
@@ -459,6 +474,7 @@ export async function importHermesSession(ctx: any) {
     model: profileDefault.model,
     provider: profileDefault.provider,
     title: detail.title || undefined,
+    userId: getCurrentUserId(ctx),
   })
 
   localUpdateSession(detail.id, {
@@ -657,7 +673,7 @@ export async function setWorkspace(ctx: any) {
   const existing = getSession(id)
   if (denySessionAccess(ctx, existing)) return
   if (!existing) {
-    createSession({ id, profile: requestedProfile(ctx) || 'default', title: '' })
+    createSession({ id, profile: requestedProfile(ctx) || 'default', title: '', userId: getCurrentUserId(ctx) })
   }
   updateSession(id, { workspace: workspace || null } as any)
   ctx.body = { ok: true }
@@ -680,7 +696,7 @@ export async function setModel(ctx: any) {
   const existing = getSession(id)
   if (denySessionAccess(ctx, existing)) return
   if (!existing) {
-    createSession({ id, profile: requestedProfile(ctx) || 'default', title: '' })
+    createSession({ id, profile: requestedProfile(ctx) || 'default', title: '', userId: getCurrentUserId(ctx) })
   }
   updateSession(id, { model: model.trim(), provider: (provider || '').trim() } as any)
   ctx.body = { ok: true }

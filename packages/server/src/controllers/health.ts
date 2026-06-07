@@ -60,6 +60,11 @@ function isUpdateCheckDisabled(): boolean {
   return raw === 'true' || raw === '1' || raw === 'on' || raw === 'yes'
 }
 
+function isNodeVersionCheckDisabled(): boolean {
+  const raw = (process.env.HERMES_WEB_UI_DISABLE_NODE_VERSION_CHECK || '').trim().toLowerCase()
+  return raw === 'true' || raw === '1' || raw === 'on' || raw === 'yes'
+}
+
 export async function checkLatestVersion(): Promise<void> {
   if (isUpdateCheckDisabled()) return
   try {
@@ -95,6 +100,6 @@ export async function healthCheck(ctx: any) {
     webui_update_available: isUpdateCheckDisabled()
       ? false
       : Boolean(LOCAL_VERSION && cachedLatestVersion && cachedLatestVersion !== LOCAL_VERSION),
-    node_version: process.versions.node,
+    node_version: isNodeVersionCheckDisabled() ? undefined : process.versions.node,
   }
 }

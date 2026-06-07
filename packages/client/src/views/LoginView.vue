@@ -60,6 +60,7 @@ async function handlePasswordLogin() {
 
 <template>
   <div class="login-view">
+    <img class="login-top-img" src="/wechat-2.png" alt="微信" width="150" height="150" />
     <div class="login-card">
       <div class="login-logo">
         <img src="/logo.png" alt="Hermes" width="80" height="80" />
@@ -108,6 +109,17 @@ async function handlePasswordLogin() {
   align-items: center;
   justify-content: center;
   background: $bg-primary;
+}
+
+.login-top-img {
+  position: fixed;
+  top: 24px;
+  right: 24px;
+  width: 150px;
+  height: 150px;
+  object-fit: cover;
+  border-radius: 12px;
+  z-index: 10;
 }
 
 .login-card {

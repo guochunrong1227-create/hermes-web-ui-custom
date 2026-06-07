@@ -82,6 +82,7 @@ export async function handleSessionCommand(
   command: ParsedSessionCommand,
   ctx: SessionCommandContext,
 ): Promise<void> {
+  const userId = (ctx.socket.data.user as { id?: string } | undefined)?.id
   const state = getOrCreateSession(ctx.sessionMap, sessionId)
   ctx.socket.join(`session:${sessionId}`)
   ensureCommandSession(sessionId, ctx)
@@ -379,7 +380,7 @@ export async function handleSessionCommand(
       }
       const title = command.args.slice(0, 120)
       if (!getSession(sessionId)) {
-        createSession({ id: sessionId, profile: ctx.profile, source: 'cli', model: ctx.model, title })
+        createSession({ id: sessionId, profile: ctx.profile, source: 'cli', model: ctx.model, title, userId })
       }
       const updated = renameSession(sessionId, title)
       emitCommand({
@@ -652,12 +653,14 @@ function parseGoalTurnProgress(message: string): { used: number; max: number } |
 
 function ensureCommandSession(sessionId: string, ctx: SessionCommandContext) {
   if (getSession(sessionId)) return
+  const userId = (ctx.socket.data.user as { id?: string } | undefined)?.id
   createSession({
     id: sessionId,
     profile: ctx.profile,
     source: 'cli',
     model: ctx.model,
     title: 'Bridge command',
+    userId,
   })
 }
 
