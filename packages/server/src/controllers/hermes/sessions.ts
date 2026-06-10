@@ -262,8 +262,10 @@ export async function listConversations(ctx: any) {
   const limit = ctx.query.limit ? parseInt(ctx.query.limit as string, 10) : undefined
 
   const profile = explicitProfileFilter(ctx)
-  const userId = getCurrentUserId(ctx)
-  const sessions = localListSessions(profile, source, limit && limit > 0 ? limit : 200, userId)
+  // super_admin should see all conversations; regular users see only their own
+  const isSuperAdmin = ctx.state?.user?.role === 'super_admin'
+  const currentUserId = isSuperAdmin ? undefined : getCurrentUserId(ctx)
+  const sessions = localListSessions(profile, source, limit && limit > 0 ? limit : 200, currentUserId)
   const summaries: ConversationSummary[] = sessions.map(s => ({
     id: s.id,
     profile: s.profile || null,
@@ -330,7 +332,9 @@ export async function list(ctx: any) {
   const profile = explicitProfileFilter(ctx)
   const effectiveLimit = limit && limit > 0 ? limit : 2000
 
-  const allSessions = localListSessions(profile, source, effectiveLimit, getCurrentUserId(ctx))
+  // All users (including super_admin) see only their own sessions
+  const currentUserId = getCurrentUserId(ctx)
+  const allSessions = localListSessions(profile, source, effectiveLimit, currentUserId)
   const knownProfiles = profile ? null : new Set(listProfileNamesFromDisk())
   ctx.body = {
     sessions: filterPendingDeletedSessions(filterByAllowedProfiles(ctx, allSessions).filter(s =>
@@ -350,20 +354,31 @@ export async function listHermesSessions(ctx: any) {
   const profile = requestedProfile(ctx)
   const effectiveLimit = limit && limit > 0 ? limit : 2000
 
-  const importedIds = new Set(localListSessions(profile, undefined, effectiveLimit, getCurrentUserId(ctx)).map(session => session.id))
-  const allSessions = (await listSessionSummaries(source, effectiveLimit, profile))
+  // super_admin should see all imported sessions; regular users see only their own
+  const isSuperAdmin = ctx.state?.user?.role === 'super_admin'
+  const currentUserId = isSuperAdmin ? undefined : getCurrentUserId(ctx)
+  const importedIds = new Set(localListSessions(profile, undefined, effectiveLimit, currentUserId).map(session => session.id))
+  const allHermesSessions = (await listSessionSummaries(source, effectiveLimit, profile))
     .map(session => ({
       ...(profile ? { ...session, profile } : session),
       webui_imported: importedIds.has(session.id),
     }))
-  ctx.body = { sessions: filterPendingDeletedSessions(filterByAllowedProfiles(ctx, allSessions).filter(s => s.source !== 'api_server')) }
+  // Filter Hermes sessions by user_id for non-super_admin users
+  // Only show sessions where user_id matches (empty user_id sessions are hidden for regular users)
+  const filteredSessions = isSuperAdmin
+    ? allHermesSessions
+    : allHermesSessions.filter(s => s.user_id && s.user_id === String(currentUserId))
+  ctx.body = { sessions: filterPendingDeletedSessions(filterByAllowedProfiles(ctx, filteredSessions).filter(s => s.source !== 'api_server')) }
 }
 
 export async function search(ctx: any) {
   const q = typeof ctx.query.q === 'string' ? ctx.query.q : ''
   const limit = ctx.query.limit ? parseInt(ctx.query.limit as string, 10) : undefined
   const profile = explicitProfileFilter(ctx)
-  const results = localSearchSessions(profile, q, limit && limit > 0 ? limit : 20, getCurrentUserId(ctx))
+  // super_admin should search all sessions; regular users search only their own
+  const isSuperAdmin = ctx.state?.user?.role === 'super_admin'
+  const currentUserId = isSuperAdmin ? undefined : getCurrentUserId(ctx)
+  const results = localSearchSessions(profile, q, limit && limit > 0 ? limit : 20, currentUserId)
   const knownProfiles = profile ? null : new Set(listProfileNamesFromDisk())
   ctx.body = {
     results: filterPendingDeletedSessions(filterByAllowedProfiles(ctx, results).filter(s =>

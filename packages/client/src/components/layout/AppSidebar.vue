@@ -10,7 +10,7 @@ import ThemeSwitch from "./ThemeSwitch.vue";
 import { useSessionSearch } from '@/composables/useSessionSearch'
 import { usePersistentRecord } from '@/composables/usePersistentRecord'
 import RouteLinkItem from '@/components/common/RouteLinkItem.vue'
-import { isStoredSuperAdmin, getStoredUsername } from "@/api/client";
+import { isStoredSuperAdmin, getStoredUserRole, getStoredUsername } from "@/api/client";
 
 const { t } = useI18n();
 const route = useRoute();
@@ -24,6 +24,7 @@ const selectedKey = computed(() => {
   return route.name as string;
 });
 const isSuperAdmin = computed(() => isStoredSuperAdmin());
+const isNormalAdmin = computed(() => getStoredUserRole() === 'admin');
 const currentUsername = computed(() => getStoredUsername());
 const isVersionPreview = import.meta.env.VITE_HERMES_PREVIEW === '1';
 
@@ -152,7 +153,7 @@ function handleLogout() {
             </svg>
             <span>{{ t("sidebar.channels") }}</span>
           </RouteLinkItem>
-          <RouteLinkItem class="nav-item" :to="{ name: 'hermes.skills' }" :active="selectedKey === 'hermes.skills'">
+          <RouteLinkItem v-if="!isNormalAdmin" class="nav-item" :to="{ name: 'hermes.skills' }" :active="selectedKey === 'hermes.skills'">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
               <polygon points="12 2 2 7 12 12 22 7 12 2" />
               <polyline points="2 17 12 22 22 17" />
@@ -160,7 +161,7 @@ function handleLogout() {
             </svg>
             <span>{{ t("sidebar.skills") }}</span>
           </RouteLinkItem>
-          <RouteLinkItem class="nav-item" :to="{ name: 'hermes.plugins' }" :active="selectedKey === 'hermes.plugins'">
+          <RouteLinkItem v-if="!isNormalAdmin" class="nav-item" :to="{ name: 'hermes.plugins' }" :active="selectedKey === 'hermes.plugins'">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
               <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l2.1-2.1a4 4 0 0 1-5.3 5.3l-7.8 7.8a2.1 2.1 0 0 1-3-3l7.8-7.8a4 4 0 0 1 5.3-5.3l-2.1 2.1z" />
               <path d="M5 19l1-1" />
@@ -176,7 +177,7 @@ function handleLogout() {
             </svg>
             <span>{{ t("sidebar.mcp") }}</span>
           </RouteLinkItem>
-          <RouteLinkItem class="nav-item" :to="{ name: 'hermes.memory' }" :active="selectedKey === 'hermes.memory'">
+          <RouteLinkItem v-if="!isNormalAdmin" class="nav-item" :to="{ name: 'hermes.memory' }" :active="selectedKey === 'hermes.memory'">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
               <path d="M9 18h6" />
               <path d="M10 22h4" />
@@ -253,7 +254,7 @@ function handleLogout() {
           </svg>
         </div>
         <div v-show="!isGroupCollapsed('tools')" class="nav-group-items">
-          <RouteLinkItem v-if="hasRoute('hermes.codingAgents')" class="nav-item" :to="{ name: 'hermes.codingAgents' }" :active="selectedKey === 'hermes.codingAgents'">
+          <RouteLinkItem v-if="hasRoute('hermes.codingAgents') && !isNormalAdmin" class="nav-item" :to="{ name: 'hermes.codingAgents' }" :active="selectedKey === 'hermes.codingAgents'">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
               <polyline points="16 18 22 12 16 6" />
               <polyline points="8 6 2 12 8 18" />
