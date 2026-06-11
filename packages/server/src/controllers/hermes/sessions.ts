@@ -358,11 +358,44 @@ export async function listHermesSessions(ctx: any) {
   const isSuperAdmin = ctx.state?.user?.role === 'super_admin'
   const currentUserId = isSuperAdmin ? undefined : getCurrentUserId(ctx)
   const importedIds = new Set(localListSessions(profile, undefined, effectiveLimit, currentUserId).map(session => session.id))
-  const allHermesSessions = (await listSessionSummaries(source, effectiveLimit, profile))
-    .map(session => ({
-      ...(profile ? { ...session, profile } : session),
+
+  // When super_admin requests without a specific profile, aggregate across all profiles
+  const allProfileNames = listProfileNamesFromDisk()
+  let rawSessions: any[] = []
+
+  if (profile) {
+    const r = await listSessionSummaries(source, effectiveLimit, profile)
+    rawSessions = r ? [r] : []
+  } else if (isSuperAdmin) {
+    const allSess = await listSessionSummaries(source, effectiveLimit, allProfileNames[0])
+    rawSessions = allSess ? [allSess] : []
+    for (let i = 1; i < allProfileNames.length; i++) {
+      const r = await listSessionSummaries(source, effectiveLimit, allProfileNames[i])
+      if (r && r.length > 0) {
+        rawSessions.push(...r)
+      }
+    }
+  } else {
+    const r = await listSessionSummaries(source, effectiveLimit, undefined)
+    rawSessions = r ? [r] : []
+  }
+
+  const flatSessions: any[] = []
+  for (const batch of rawSessions) {
+    if (Array.isArray(batch)) {
+      flatSessions.push(...batch)
+    } else if (batch) {
+      flatSessions.push(batch)
+    }
+  }
+
+  const allHermesSessions = flatSessions.map((session) => {
+    const prof = profile || (isSuperAdmin && allProfileNames.length > 0 ? (session as any)._profile_name || allProfileNames[0] : undefined)
+    return {
+      ...(prof ? { ...session, profile: prof } : session),
       webui_imported: importedIds.has(session.id),
-    }))
+    }
+  })
   // Filter Hermes sessions by user_id for non-super_admin users
   // Only show sessions where user_id matches (empty user_id sessions are hidden for regular users)
   const filteredSessions = isSuperAdmin

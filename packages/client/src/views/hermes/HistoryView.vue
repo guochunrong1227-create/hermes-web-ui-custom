@@ -13,6 +13,7 @@ import HistoryMessageList from '@/components/hermes/chat/HistoryMessageList.vue'
 import SessionListItem from '@/components/hermes/chat/SessionListItem.vue'
 import OutlinePanel from '@/components/hermes/chat/OutlinePanel.vue'
 import { batchDeleteSessions, deleteSession, fetchHermesSessions, fetchHermesSession, fetchSessionMessagesPage, importHermesSession, type HermesMessage, type SessionSummary } from '@/api/hermes/sessions'
+import { isStoredSuperAdmin } from '@/api/client'
 
 const appStore = useAppStore()
 const profilesStore = useProfilesStore()
@@ -32,7 +33,18 @@ const routeProfile = computed(() => {
   return typeof value === 'string' && value.trim() ? value : null
 })
 
-const effectiveHistoryProfile = computed(() => profilesStore.activeProfileName || routeProfile.value || null)
+const isSuperAdmin = computed(() => isStoredSuperAdmin())
+
+const effectiveHistoryProfile = computed(() => {
+  // super_admin 可以查看所有 profile 的会话，不传 profile 参数
+  if (isSuperAdmin.value) return null
+  return profilesStore.activeProfileName || routeProfile.value || null
+})
+
+// super_admin 查看所有 profile 时显示不同提示
+const historyScopeHintKey = computed(() =>
+  isSuperAdmin.value ? 'chat.historyScopeHintAllProfiles' : 'chat.historyScopeHint'
+)
 
 // Hermes history sessions (exclude api_server)
 const hermesSessions = ref<SessionSummary[]>([])
@@ -732,7 +744,7 @@ function handleBatchDeleteConfirm() {
         </div>
       </div>
       <div v-if="showSessions" class="session-scope-note">
-        {{ t('chat.historyScopeHint') }}
+        {{ t(historyScopeHintKey) }}
       </div>
       <div v-if="showSessions" class="session-items">
         <div v-if="hermesSessionsLoading && hermesSessions.length === 0" class="session-loading">{{ t('common.loading') }}</div>
